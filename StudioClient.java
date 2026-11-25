@@ -1,8 +1,3 @@
-/*
- * Sherva CLIENT (JFrame / Swing GUI) - standalone single file, pink "writer's studio" theme.
- * Run:  java StudioClient.java      (or: javac StudioClient.java && java StudioClient)
- * Start one instance per user; enter the server IP and port, then a pen name.
- */
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.basic.BasicTabbedPaneUI;
@@ -36,16 +31,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Threading rules: connect + reading happen on a background thread, every write goes through a
- * single-thread executor, and every Swing component is touched only on the Event Dispatch Thread.
- */
 public class StudioClient extends JFrame {
     private static final String APPROVE = "APPROVE";
     private static final String CHANGES = "CHANGES";
     private static final int REQUIRED_APPROVALS = 2;
 
-    /** Same line format as the server: TYPE|field|field (fields URL-encoded). */
     private static final class Proto {
         static final int DEFAULT_PORT = 5050;
         static String build(String type, String... fields) {
@@ -64,7 +54,6 @@ public class StudioClient extends JFrame {
         static String arg(String[] p, int i) { return i < p.length ? p[i].trim() : ""; }
     }
 
-    // ---- pink palette -------------------------------------------------------------
     private static final Color BLUSH = new Color(0xFFF0F5);
     private static final Color PETAL = new Color(0xFCE4EC);
     private static final Color SOFT = new Color(0xF8BBD0);
@@ -74,47 +63,41 @@ public class StudioClient extends JFrame {
     private static final Color MUTED = new Color(0xB0668A);
     private static final Color PAPER = new Color(0xFFF8FB);
 
-    // connection controls
     private final PinkField hostField = new PinkField("localhost", 11);
     private final PinkField portField = new PinkField(String.valueOf(Proto.DEFAULT_PORT), 5);
     private final PinkField nickField = new PinkField("", 10);
     private final PinkButton connectBtn = new PinkButton("Connect", false);
     private final JLabel statusLabel = new JLabel(" Not connected. Enter the server details above.");
 
-    // chat
     private final JTextPane chatPane = new JTextPane();
     private final PinkField input = new PinkField("", 30);
     private final PinkButton sendBtn = new PinkButton("Send", true);
     private final DefaultListModel<String> usersModel = new DefaultListModel<>();
     private final JLabel usersTitle = titleLabel("Writers online");
 
-    // idea board
     private final DefaultTableModel ideasModel = model("ID", "Author", "Category", "Title", "Status");
     private final JTable ideasTable = new JTable(ideasModel);
     private final JTextArea ideaDetail = readOnlyArea();
     private final DefaultTableModel reqModel = model("ID", "Feedback request");
     private final JTable reqTable = new JTable(reqModel) {
-        @Override public String getToolTipText(java.awt.event.MouseEvent e) { return rowTip(this, e); }
+    @Override public String getToolTipText(java.awt.event.MouseEvent e) { return rowTip(this, e); }
     };
     private final DefaultTableModel replyModel = model("ID", "From", "Time", "Feedback");
     private final JTable replyTable = new JTable(replyModel) {
         @Override public String getToolTipText(java.awt.event.MouseEvent e) { return rowTip(this, e); }
     };
 
-    // revisions
     private final DefaultTableModel revModel = model("Rev", "Idea", "Ver", "Author", "Status", "Votes");
     private final JTable revTable = new JTable(revModel);
     private final JTextArea revDetail = readOnlyArea();
 
     private final List<JButton> featureButtons = new ArrayList<>();
 
-    // client-side copies of server data (EDT only)
     private final Map<Integer, String[]> ideaData = new HashMap<>();
     private final Map<Integer, String[]> revData = new HashMap<>();
     private final List<String[]> reqData = new ArrayList<>();
     private final List<String[]> replyData = new ArrayList<>();
 
-    // connection state
     private volatile Socket socket;
     private volatile PrintWriter out;
     private volatile boolean intentional;
@@ -131,7 +114,7 @@ public class StudioClient extends JFrame {
         buildUi();
         applyState();
         addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent e) {
+        @Override public void windowClosing(WindowEvent e) {
                 disconnect();
                 dispose();
                 System.exit(0);
@@ -143,19 +126,16 @@ public class StudioClient extends JFrame {
         setLocationRelativeTo(null);
     }
 
-    // =============================================================== custom pink widgets
     private static void smooth(Graphics2D g2) {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
     }
 
-    /** Pill-shaped button: filled pink (primary) or white with a rose outline. */
     private static final class PinkButton extends JButton {
         private final boolean primary;
         private boolean danger;
-        /** Marks a destructive action: red outline and text instead of pink. */
+
         PinkButton danger() { danger = true; repaint(); return this; }
-        /** Smaller pill for buttons that sit in a section header. */
         PinkButton compact() {
             setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
             setBorder(new EmptyBorder(4, 12, 4, 12));
@@ -203,7 +183,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Rounded white text field with a pink outline that glows when focused. */
     private static final class PinkField extends JTextField {
         PinkField(String text, int cols) {
             super(text, cols);
@@ -227,7 +206,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Rounded "card" panel. */
     private static final class RoundedPanel extends JPanel {
         private final Color fill, line;
         private final int arc;
@@ -250,7 +228,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Gradient banner with soft bubbles. */
     private static final class HeaderPanel extends JPanel {
         HeaderPanel(LayoutManager lm) { super(lm); setOpaque(true); }
         @Override protected void paintComponent(Graphics g) {
@@ -269,7 +246,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** White badge with a pink heart. */
     private static final class Logo extends JComponent {
         Logo() { setPreferredSize(new Dimension(52, 52)); }
         @Override protected void paintComponent(Graphics g) {
@@ -292,7 +268,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Pill tabs: rose when selected, petal otherwise. */
     private static final class PinkTabUI extends BasicTabbedPaneUI {
         @Override protected void installDefaults() {
             super.installDefaults();
@@ -310,7 +285,7 @@ public class StudioClient extends JFrame {
             g2.dispose();
         }
         @Override protected void paintText(Graphics g, int tp, Font font, FontMetrics fm, int idx,
-                                           String title, Rectangle tr, boolean sel) {
+            String title, Rectangle tr, boolean sel) {
             Graphics2D g2 = (Graphics2D) g.create();
             smooth(g2);
             g2.setFont(font);
@@ -325,7 +300,6 @@ public class StudioClient extends JFrame {
         @Override protected int getTabLabelShiftY(int tp, int idx, boolean sel) { return 0; }
     }
 
-    // ---- table renderers
     private static final class StripeRenderer extends DefaultTableCellRenderer {
         @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean f, int r, int c) {
             super.getTableCellRendererComponent(t, v, sel, false, r, c);
@@ -348,7 +322,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Status shown as a coloured pill. */
     private static final class PillRenderer extends DefaultTableCellRenderer {
         private Color rowBg = Color.WHITE, pill = PETAL;
         @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean f, int r, int c) {
@@ -381,7 +354,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    // =============================================================== UI helpers
     private static DefaultTableModel model(String... cols) {
         return new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -438,7 +410,6 @@ public class StudioClient extends JFrame {
         return b;
     }
 
-    /** Buttons that act on the selected row of a table: greyed out until a row is selected. */
     private final List<Object[]> selectionButtons = new ArrayList<>();
 
     private PinkButton tableButton(String text, boolean primary, boolean danger, JTable table, Runnable action) {
@@ -454,7 +425,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Hover text showing the full (last column) text of the row under the pointer. */
     private static String rowTip(JTable t, java.awt.event.MouseEvent e) {
         int r = t.rowAtPoint(e.getPoint());
         if (r < 0) return null;
@@ -469,7 +439,6 @@ public class StudioClient extends JFrame {
         return l;
     }
 
-    /** Small caption on the left, compact action buttons on the right. */
     private static JPanel sectionHeader(String title, JComponent... buttons) {
         JLabel l = new JLabel(title);
         l.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
@@ -500,12 +469,10 @@ public class StudioClient extends JFrame {
         if (statusCol >= 0) t.getColumnModel().getColumn(statusCol).setCellRenderer(new PillRenderer());
     }
 
-    // =============================================================== UI
     private void buildUi() {
         getContentPane().setBackground(BLUSH);
         setLayout(new BorderLayout());
 
-        // ---- header: brand + connection pill
         HeaderPanel header = new HeaderPanel(new BorderLayout(16, 0));
         header.setBorder(new EmptyBorder(14, 18, 14, 18));
 
@@ -539,7 +506,6 @@ public class StudioClient extends JFrame {
         header.add(pillWrap, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
-        // ---- tabs
         JTabbedPane tabs = new JTabbedPane();
         tabs.setUI(new PinkTabUI());
         tabs.setOpaque(false);
@@ -552,7 +518,6 @@ public class StudioClient extends JFrame {
             ((DefaultTableModel) t.getModel()).addTableModelListener(e -> SwingUtilities.invokeLater(this::updateSelectionButtons));
         }
 
-        // ---- online list
         JList<String> users = new JList<>(usersModel);
         users.setOpaque(false);
         users.setSelectionModel(new DefaultListSelectionModel() {
@@ -580,7 +545,6 @@ public class StudioClient extends JFrame {
         center.add(side, BorderLayout.EAST);
         add(center, BorderLayout.CENTER);
 
-        // ---- status bar
         statusLabel.setForeground(DEEP);
         statusLabel.setFont(new Font(Font.SERIF, Font.ITALIC, 13));
         JPanel bar = new JPanel(new BorderLayout());
@@ -637,12 +601,10 @@ public class StudioClient extends JFrame {
         reqTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) refreshReplies();
         });
-        // double-click a row to edit it; right-click for an Edit / Delete menu
         attachRowMenu(ideasTable, this::editIdea, this::deleteIdea);
         attachRowMenu(reqTable, this::editRequest, this::deleteRequest);
         attachRowMenu(replyTable, this::editReply, this::deleteReply);
 
-        // ---- top: the idea list, with the actions that work on the selected idea
         JPanel buttons = clear(new FlowLayout(FlowLayout.LEFT, 6, 0));
         buttons.add(featureButton("+ New Idea Card", true, this::newIdea));
         buttons.add(tableButton("Request Feedback", false, false, ideasTable, this::requestFeedback));
@@ -654,7 +616,6 @@ public class StudioClient extends JFrame {
         RoundedPanel boardCard = card("Idea board", ideasBody);
         boardCard.setPreferredSize(new Dimension(100, 250));
 
-        // ---- bottom left: the selected idea, with Edit / Delete right under it
         JPanel ideaBtns = clear(new FlowLayout(FlowLayout.LEFT, 6, 0));
         ideaBtns.add(tableButton("Edit Idea", true, false, ideasTable, this::editIdea));
         ideaBtns.add(tableButton("Delete Idea", false, true, ideasTable, this::deleteIdea));
@@ -662,7 +623,6 @@ public class StudioClient extends JFrame {
         ideaBody.add(scroll(ideaDetail), BorderLayout.CENTER);
         ideaBody.add(ideaBtns, BorderLayout.SOUTH);
 
-        // ---- bottom right: feedback requests and replies, each with its buttons in the header
         JPanel reqBox = clear(new BorderLayout(0, 4));
         reqBox.add(sectionHeader("Feedback requests",
                 tableButton("Edit", false, false, reqTable, this::editRequest).compact(),
@@ -691,7 +651,6 @@ public class StudioClient extends JFrame {
         return p;
     }
 
-    /** Double-click = edit; right-click = menu with Edit and Delete (the row under the pointer gets selected). */
     private void attachRowMenu(JTable table, Runnable edit, Runnable delete) {
         JPopupMenu menu = new JPopupMenu();
         JMenuItem editItem = new JMenuItem("Edit");
@@ -725,7 +684,7 @@ public class StudioClient extends JFrame {
 
     private JPanel buildRevisionTab() {
         styleTable(revTable, 4);
-        attachRowMenu(revTable, this::editRevision, this::deleteRevision);   // revisions: author only
+        attachRowMenu(revTable, this::editRevision, this::deleteRevision);
         revTable.getColumnModel().getColumn(0).setMaxWidth(50);
         revTable.getColumnModel().getColumn(2).setMaxWidth(50);
         revTable.getColumnModel().getColumn(4).setMaxWidth(130);
@@ -753,7 +712,6 @@ public class StudioClient extends JFrame {
         return p;
     }
 
-    /** Enables/disables controls to match the connection state. */
     private void applyState() {
         boolean open = socket != null || connecting;
         hostField.setEnabled(!open);
@@ -779,7 +737,6 @@ public class StudioClient extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Sherva", JOptionPane.WARNING_MESSAGE);
     }
 
-    // ---- chat rendering: own messages are right-aligned pink bubbles, others left-aligned
     private void chatAdd(String text, SimpleAttributeSet attrs) throws BadLocationException {
         StyledDocument d = chatPane.getStyledDocument();
         d.insertString(d.getLength(), text, attrs);
@@ -829,7 +786,6 @@ public class StudioClient extends JFrame {
     private void chatInfo(String text) { chatNote(text, MUTED); }
     private void chatError(String text) { chatNote("! " + text, new Color(0xC62828)); }
 
-    // =============================================================== networking
     private void connect() {
         String host = hostField.getText().trim();
         String portText = portField.getText().trim();
@@ -876,7 +832,6 @@ public class StudioClient extends JFrame {
                     SwingUtilities.invokeLater(() -> handleLine(l));
                 }
             } catch (IOException ignored) {
-                // closed locally or connection lost; handled in onClosed
             } finally {
                 try { s.close(); } catch (IOException ignored) { }
                 SwingUtilities.invokeLater(() -> onClosed(s));
@@ -921,7 +876,6 @@ public class StudioClient extends JFrame {
         }
     }
 
-    /** Queues a write on the sender thread so the GUI never blocks on the network. */
     private void send(String line) {
         PrintWriter w = out;
         if (w == null || !joined) { status("Not connected."); return; }
@@ -940,7 +894,6 @@ public class StudioClient extends JFrame {
         input.setText("");
     }
 
-    // =============================================================== incoming messages (EDT)
     private void handleLine(String line) {
         String[] p = Proto.parse(line);
         switch (p[0]) {
@@ -1049,7 +1002,6 @@ public class StudioClient extends JFrame {
         return row < 0 ? -1 : (Integer) m.getValueAt(row, 0);
     }
 
-    // =============================================================== view refresh (EDT)
     private void refreshIdeaDetail() {
         String[] d = ideaData.get(selectedId(ideasTable, ideasModel));
         if (d == null) { ideaDetail.setText("Select an idea card to read its pitch."); return; }
@@ -1092,12 +1044,10 @@ public class StudioClient extends JFrame {
         revDetail.setCaretPosition(0);
     }
 
-    // =============================================================== feature actions
     private String askText(String title, String label, boolean required) {
         return askText(title, label, required, "");
     }
 
-    /** Same dialog, pre-filled with existing text (used by the edit actions). */
     private String askText(String title, String label, boolean required, String initial) {
         JTextArea area = new JTextArea(initial, 4, 30);
         area.setLineWrap(true);
@@ -1116,10 +1066,8 @@ public class StudioClient extends JFrame {
         return text;
     }
 
-    // Same limits the server enforces, so the writer sees them while typing instead of getting an error afterwards.
     private static final int IDEA_TITLE_MAX = 80, IDEA_PITCH_MAX = 400;
 
-    /** Stops typing/pasting past {@code max} characters (extra pasted text is cut off). */
     private static void limitLength(javax.swing.text.JTextComponent c, int max) {
         ((javax.swing.text.AbstractDocument) c.getDocument()).setDocumentFilter(new javax.swing.text.DocumentFilter() {
             @Override public void insertString(FilterBypass fb, int off, String s, AttributeSet a) throws BadLocationException {
@@ -1143,7 +1091,6 @@ public class StudioClient extends JFrame {
         });
     }
 
-    /** "123 / 400" label that follows the text component and turns red at the limit. */
     private static JLabel counter(javax.swing.text.JTextComponent c, int max) {
         JLabel l = new JLabel();
         l.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
@@ -1168,11 +1115,6 @@ public class StudioClient extends JFrame {
         return row;
     }
 
-    /**
-     * Shared by New and Edit. Pass null for a blank form. A roomy, resizable writing window:
-     * the pitch box takes all the extra space. Stays open (keeping what was typed) until the title is filled in.
-     * @return {category, title, pitch} or null if cancelled.
-     */
     private String[] ideaDialog(String heading, String[] existing) {
         JComboBox<String> cat = new JComboBox<>(new String[]{"Poem", "Short Story", "Essay", "Script", "Song Lyrics", "Other"});
         cat.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
@@ -1256,13 +1198,11 @@ public class StudioClient extends JFrame {
                 JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
     }
 
-    // ---- update / delete. Ideas, requests and replies can be changed by anyone; revisions only by their author
-    //      (the server re-checks revision ownership).
     private void editIdea() {
         if (!joined) return;
         int id = selectedId(ideasTable, ideasModel);
         if (id < 0) { status("Select an idea card first."); return; }
-        String[] d = ideaData.get(id);   // IDEA|id|author|category|title|summary|status
+        String[] d = ideaData.get(id);
         if (d == null) return;
         String[] v = ideaDialog("Edit Idea Card", new String[]{d[3], d[4], d[5]});
         if (v != null) send(Proto.build("IDEAUPD", String.valueOf(id), v[0], v[1], v[2]));
@@ -1285,7 +1225,7 @@ public class StudioClient extends JFrame {
     private void editRequest() {
         int id = selectedId(reqTable, reqModel);
         if (id < 0) { status("Select a feedback request first."); return; }
-        String[] r = findRow(reqData, id);   // FBREQ|id|ideaId|author|question
+        String[] r = findRow(reqData, id);
         if (r == null) return;
         String q = askText("Edit Feedback Request", "What do you want readers to look at?", true, r[4]);
         if (q != null) send(Proto.build("FBREQUPD", String.valueOf(id), q));
@@ -1303,7 +1243,7 @@ public class StudioClient extends JFrame {
     private void editReply() {
         int id = selectedId(replyTable, replyModel);
         if (id < 0) { status("Select a reply first."); return; }
-        String[] r = findRow(replyData, id);   // FBREPLY|id|reqId|author|comment|time
+        String[] r = findRow(replyData, id);
         if (r == null) return;
         String c = askText("Edit Feedback", "Your feedback:", true, r[4]);
         if (c != null) send(Proto.build("FBREPLYUPD", String.valueOf(id), c));
@@ -1320,7 +1260,7 @@ public class StudioClient extends JFrame {
     private void editRevision() {
         int id = selectedId(revTable, revModel);
         if (id < 0) { status("Select a revision first."); return; }
-        String[] d = revData.get(id);   // REV|id|ideaId|title|version|author|note|status|...
+        String[] d = revData.get(id);
         if (d == null) return;
         if (!d[5].equals(nick)) { status("Only the author can edit this revision."); return; }
         String note = askText("Edit Revision", "What changed in this revision? (Editing clears existing votes.)", true, d[6]);
@@ -1336,7 +1276,6 @@ public class StudioClient extends JFrame {
         if (confirm("Delete version " + d[4] + " of \"" + d[3] + "\"?")) send(Proto.build("REVDEL", String.valueOf(id)));
     }
 
-    /** @return selected idea id if it belongs to this user, otherwise -1 (with a status message). */
     private int ownIdeaSelected(String action) {
         int id = selectedId(ideasTable, ideasModel);
         if (id < 0) { status("Select an idea card first."); return -1; }
@@ -1378,7 +1317,6 @@ public class StudioClient extends JFrame {
         send(Proto.build("REVVOTE", String.valueOf(id), choice, comment));
     }
 
-    // =============================================================== main
     private static void applyPinkDefaults() {
         UIManager.put("Panel.background", BLUSH);
         UIManager.put("OptionPane.background", BLUSH);
