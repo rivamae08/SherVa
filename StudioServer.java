@@ -1,10 +1,3 @@
-/*
- * Sherva SERVER - THINK. WRITE. DESIGN. (single file, no GUI).
- * Run:  java StudioServer.java [port]        (default port 5050)
- *  or:  javac StudioServer.java && java StudioServer [port]
- * Contains: StudioServer (accept loop + validation), ClientHandler (thread per client),
- *           StudioState (ideas/feedback/revisions), Protocol (message format).
- */
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -26,17 +19,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
-/**
- * Sherva server. Accepts TCP clients (one handler thread each), validates every
- * command and mutates the shared StudioState while holding a single lock, then
- * broadcasts the result so every client stays synchronised.
- */
 public class StudioServer {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
     private static final Pattern NICK = Pattern.compile("[A-Za-z0-9_.-]{1,16}");
 
     private final int port;
-    private final Object lock = new Object();             // guards clients + state
+    private final Object lock = new Object();
     private final List<ClientHandler> clients = new ArrayList<>();
     private final StudioState state = new StudioState();
     private final ExecutorService pool = Executors.newCachedThreadPool();
@@ -78,7 +66,6 @@ public class StudioServer {
 
     void log(String msg) { System.out.println("[" + LocalTime.now().format(TIME) + "] " + msg); }
 
-    // ------------------------------------------------------------------ join / leave
     String register(ClientHandler c, String nick) {
         synchronized (lock) {
             String err = validateNick(nick, c);
@@ -118,8 +105,6 @@ public class StudioServer {
         return null;
     }
 
-    // ------------------------------------------------------------------ dispatch
-    /** @return false when this client should be disconnected. */
     boolean handle(ClientHandler c, String line) {
         String[] p = Protocol.parse(line);
         synchronized (lock) {
@@ -192,10 +177,9 @@ public class StudioServer {
         c.send(Protocol.build("NICK", newNick));
         broadcast(Protocol.build("INFO", old + " is now known as " + newNick + "."));
         broadcastUsers();
-        resyncAll();   // authors on cards/revisions changed
+        resyncAll();
     }
 
-    // ------------------------------------------------------------------ original feature 1
     private void onIdea(ClientHandler c, String[] p) {
         String category = Protocol.arg(p, 1), title = Protocol.arg(p, 2), summary = Protocol.arg(p, 3);
         if (title.isEmpty()) { error(c, "An idea card needs a title."); return; }
@@ -227,7 +211,6 @@ public class StudioServer {
         broadcast(state.replyLine(state.addReply(req.id, c.nick(), comment, now())));
     }
 
-    // ------------------------------------------------------------------ original feature 2
     private void onRevisionSubmit(ClientHandler c, String[] p) {
         StudioState.Idea idea = state.idea(parseId(Protocol.arg(p, 1)));
         String note = Protocol.arg(p, 2);
@@ -268,7 +251,6 @@ public class StudioServer {
         }
     }
 
-    // ------------------------------------------------------------------ update / delete
     private void onIdeaUpdate(ClientHandler c, String[] p) {
         StudioState.Idea idea = state.idea(parseId(Protocol.arg(p, 1)));
         String category = Protocol.arg(p, 2), title = Protocol.arg(p, 3), summary = Protocol.arg(p, 4);
@@ -278,7 +260,7 @@ public class StudioServer {
         if (category.isEmpty()) category = "Other";
         state.updateIdea(idea, category, title, summary);
         broadcast(state.ideaLine(idea));
-        resyncAll();   // revision rows show the idea title
+        resyncAll();
         broadcast(Protocol.build("INFO", c.nick() + " updated the idea card \"" + title + "\"."));
     }
 
@@ -339,7 +321,7 @@ public class StudioServer {
         if (note.isEmpty()) { error(c, "Add a revision note so reviewers know what changed."); return; }
         if (note.length() > 400) { error(c, "Revision note too long (max 400)."); return; }
         r.note = note;
-        r.votes.clear();   // reviewers voted on the old text, so the review starts over
+        r.votes.clear();
         StudioState.Idea idea = state.idea(r.ideaId);
         broadcast(state.revLine(r));
         if (idea != null) broadcast(state.ideaLine(idea));
@@ -358,8 +340,6 @@ public class StudioServer {
                 + (idea == null ? "?" : idea.title) + "\"."));
     }
 
-    // ------------------------------------------------------------------ server console (admin)
-    /** Reads commands typed into the server window. The operator may edit/delete anything. */
     private void startConsole() {
         Thread t = new Thread(() -> {
             try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
@@ -473,7 +453,7 @@ public class StudioServer {
                 if (r == null) { log("No revision #" + id); return; }
                 if (text.length() > 400) { log("Max 400 characters."); return; }
                 r.note = text;
-                r.votes.clear();   // reviewers voted on the old text
+                r.votes.clear();
                 break;
             }
             default:
@@ -485,7 +465,6 @@ public class StudioServer {
         log("Edited " + kind + " #" + id);
     }
 
-    // ------------------------------------------------------------------ helpers (call under lock)
     private void broadcast(String line) {
         for (ClientHandler c : new ArrayList<>(clients)) c.send(line);
     }
@@ -513,8 +492,6 @@ public class StudioServer {
     }
 }
 
-// ===== ClientHandler =====
-/** One thread per connected client: reads lines and hands them to the server. */
 final class ClientHandler implements Runnable {
     private final Socket socket;
     private final StudioServer server;
@@ -530,7 +507,6 @@ final class ClientHandler implements Runnable {
     void setNick(String nick) { this.nick = nick; }
     String address() { return String.valueOf(socket.getRemoteSocketAddress()); }
 
-    /** Synchronized so two threads broadcasting at once can never interleave one line. */
     synchronized void send(String line) {
         if (out != null) out.println(line);
     }
@@ -541,7 +517,6 @@ final class ClientHandler implements Runnable {
                 new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             String line;
-            // Phase 1: wait for a valid JOIN
             while (nick == null && (line = in.readLine()) != null) {
                 String[] p = Protocol.parse(line);
                 if (!p[0].equals("JOIN")) {
@@ -551,7 +526,6 @@ final class ClientHandler implements Runnable {
                 String err = server.register(this, Protocol.arg(p, 1));
                 if (err != null) send(Protocol.build("ERROR", err));
             }
-            // Phase 2: normal traffic
             while (nick != null && (line = in.readLine()) != null) {
                 if (!server.handle(this, line)) break;
             }
@@ -564,11 +538,6 @@ final class ClientHandler implements Runnable {
     }
 }
 
-// ===== StudioState =====
-/**
- * Shared writing-studio data held in server memory (idea cards, feedback requests,
- * feedback replies, revisions and votes). Only touched while holding the server lock.
- */
 final class StudioState {
     static final int REQUIRED_APPROVALS = 2;
     static final String APPROVE = "APPROVE";
@@ -617,7 +586,6 @@ final class StudioState {
     private final List<Revision> revisions = new ArrayList<>();
     private int nextIdea = 1, nextReq = 1, nextReply = 1, nextRev = 1;
 
-    // ---- mutations -------------------------------------------------------
     Idea addIdea(String author, String category, String title, String summary) {
         Idea i = new Idea(nextIdea++, author, category, title, summary);
         ideas.put(i.id, i);
@@ -637,7 +605,7 @@ final class StudioState {
     }
 
     Revision addRevision(int ideaId, String author, String note) {
-        int version = 0;   // newest + 1, so numbers stay unique after a deletion
+        int version = 0;
         for (Revision r : revisions) if (r.ideaId == ideaId) version = Math.max(version, r.version);
         version++;
         Revision r = new Revision(nextRev++, ideaId, version, author, note);
@@ -649,7 +617,6 @@ final class StudioState {
         i.category = category; i.title = title; i.summary = summary;
     }
 
-    /** Removes the idea and everything hanging off it (feedback requests, replies, revisions). */
     void deleteIdea(int ideaId) {
         ideas.remove(ideaId);
         List<Integer> reqIds = new ArrayList<>();
@@ -682,7 +649,6 @@ final class StudioState {
         }
     }
 
-    // ---- lookups ---------------------------------------------------------
     Idea idea(int id) { return ideas.get(id); }
     Iterable<Idea> allIdeas() { return ideas.values(); }
     Iterable<FbReq> allReqs() { return reqs; }
@@ -704,21 +670,18 @@ final class StudioState {
         return null;
     }
 
-    // ---- revision approval workflow -------------------------------------
     int count(Revision r, String choice) {
         int n = 0;
         for (Vote v : r.votes.values()) if (v.choice.equals(choice)) n++;
         return n;
     }
 
-    /** Any "changes" vote blocks approval; otherwise enough approvals approve it. */
     String status(Revision r) {
         if (count(r, CHANGES) > 0) return "Needs Changes";
         if (count(r, APPROVE) >= REQUIRED_APPROVALS) return "Approved";
         return "Pending";
     }
 
-    /** Status shown on an idea card = status of its newest revision. */
     String ideaStatus(Idea idea) {
         Revision latest = null;
         for (Revision r : revisions) if (r.ideaId == idea.id) latest = r;
@@ -727,7 +690,6 @@ final class StudioState {
         return s.equals("Pending") ? "In Review" : s;
     }
 
-    // ---- wire lines ------------------------------------------------------
     private static String s(int n) { return String.valueOf(n); }
 
     String ideaLine(Idea i) {
@@ -756,7 +718,6 @@ final class StudioState {
                 s(count(r, APPROVE)), s(count(r, CHANGES)), votes.toString());
     }
 
-    /** Everything a newly joined (or resynchronising) client needs, in dependency order. */
     List<String> snapshot() {
         List<String> out = new ArrayList<>();
         for (Idea i : ideas.values()) out.add(ideaLine(i));
@@ -767,13 +728,6 @@ final class StudioState {
     }
 }
 
-// ===== Protocol =====
-/**
- * Sherva wire format: one message per line.
- *   TYPE|field1|field2|...
- * Every field is URL-encoded, so '|' and line breaks inside user text can never
- * break the framing. Both server and client use only these helpers.
- */
 final class Protocol {
     public static final int DEFAULT_PORT = 5050;
 
@@ -795,7 +749,6 @@ final class Protocol {
         return sb.toString();
     }
 
-    /** Returns [TYPE, decoded fields...]. Malformed fields become empty strings. */
     public static String[] parse(String line) {
         String[] parts = line.split("\\|", -1);
         for (int i = 1; i < parts.length; i++) {
@@ -808,7 +761,6 @@ final class Protocol {
         return parts;
     }
 
-    /** Safe, trimmed access to field i (empty string when missing). */
     public static String arg(String[] p, int i) {
         return i < p.length ? p[i].trim() : "";
     }
