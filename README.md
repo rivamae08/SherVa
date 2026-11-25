@@ -350,15 +350,14 @@ Both members contribute code from their own GitHub accounts. Add dated tasks wit
 
 | Date | Task | Commit link |
 |---|---|---|
-| `YYYY-MM-DD` | | |
-| `YYYY-MM-DD` | | |
+| `2026-11-25` | | |
+
 
 ### Sherwin P. Gorero (`@gorerosherwin-coder`)
 
 | Date | Task | Commit link |
 |---|---|---|
-| `YYYY-MM-DD` | | |
-| `YYYY-MM-DD` | | |
+| `2026-11-25` | | |
 
 ### Milestones
 
